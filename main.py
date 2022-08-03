@@ -6,8 +6,11 @@ CELL_WIDTH = SUDOKU_WIDTH / 9
 CELL_HEIGHT = SUDOKU_HEIGHT / 9
 
 # Import libraries
+import numpy as np
 from ppadb.client import Client
+from solve import solve
 from PIL import Image
+from cell import Cell
 import os
 
 # Ensure adb is initalized
@@ -32,22 +35,46 @@ while input() == 's':
     with open('screen.png', 'wb') as f:
         f.write(image)
 
+    # Get sudoku board
     image = Image.open('screen.png')
     image = image.crop(SUDOKU_COORDINATES)
-    image.save('sudoku.png')
 
-    OFFSET = int((CELL_WIDTH+CELL_HEIGHT) / 2 * 0.05)
+    # Get individual cells
+    OFFSET = int((CELL_WIDTH+CELL_HEIGHT) / 2 * 0.1)
     board = []
-    for x in range(9):
-        line = []
-        for y in range(9):
-            left = x * CELL_WIDTH + OFFSET
-            top = y * CELL_HEIGHT + OFFSET
+    for line in range(9):
+        lineList = []
+        for col in range(9):
+            cell = Cell()
+            
+            # Define cell position in sudoku
+            cell.pos = (line, col)
+            
+            # Define cell position in screen
+            cell.x = SUDOKU_COORDINATES[0] + col * CELL_WIDTH + (CELL_WIDTH / 2)
+            cell.y = SUDOKU_COORDINATES[1] + line * CELL_HEIGHT + (CELL_HEIGHT / 2)
+            
+            # Get cell image
+            left = col * CELL_WIDTH + OFFSET
+            top = line * CELL_HEIGHT + OFFSET
             right = left + CELL_WIDTH - OFFSET
             bottom = top + CELL_HEIGHT - OFFSET
-            line.append(image.crop((left, top, right, bottom)))
-        board.append(line)
-
-    for i in range(len(board)):
-        for j in range(len(board)):
-            board[i][j].save(f'cells/{i}_{j}.png')
+            img = image.crop((left, top, right, bottom)).resize((64, 64))
+            img = img.convert('L')
+            cell.image = img
+            
+            # Get cell value using pytesseract
+            cell.get_value()
+            
+            lineList.append(cell)
+        board.append(lineList)
+        
+    # Solve sudoku
+    boardValue = [[int(e.value) for e in line] for line in board]
+    print('\Original:')
+    for line in boardValue:
+        print(line)
+    boardSolved = solve(boardValue)
+    print('\nSolved:')
+    for line in boardSolved:
+        print(line)
