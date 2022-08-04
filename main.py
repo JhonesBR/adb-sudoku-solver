@@ -1,16 +1,9 @@
-# Variables
-SUDOKU_COORDINATES = (15, 450, 1060, 1490) # (left, top, right, bottom)
-SUDOKU_WIDTH = SUDOKU_COORDINATES[2] - SUDOKU_COORDINATES[0]
-SUDOKU_HEIGHT = SUDOKU_COORDINATES[3] - SUDOKU_COORDINATES[1]
-CELL_WIDTH = SUDOKU_WIDTH / 9
-CELL_HEIGHT = SUDOKU_HEIGHT / 9
-
 # Import libraries
-import numpy as np
 from ppadb.client import Client
+from time import sleep
 from solve import solve
-from PIL import Image
-from cell import Cell
+from utils import find_sudoku_board, get_cells, print_board
+import cv2
 import os
 
 # Ensure adb is initalized
@@ -30,51 +23,41 @@ device = devices[0]
 print('Connected to device: ' + device.serial)
 print(f'Input "s" to solve sudoku')
 while input() == 's':
+    print('Started solving, please don\'t touch the screen')
+    
     # Get sudoku board
     image = device.screencap()
     with open('screen.png', 'wb') as f:
         f.write(image)
 
     # Get sudoku board
-    image = Image.open('screen.png')
-    image = image.crop(SUDOKU_COORDINATES)
+    screen = cv2.imread("screen.png")
+    sudoku_board, (x, y) = find_sudoku_board(screen)
 
     # Get individual cells
-    OFFSET = int((CELL_WIDTH+CELL_HEIGHT) / 2 * 0.1)
-    board = []
+    cells = get_cells(sudoku_board, (x, y))
+    sudoku_matrix = []
     for line in range(9):
-        lineList = []
+        sudoku_line = []
         for col in range(9):
-            cell = Cell()
-            
-            # Define cell position in sudoku
-            cell.pos = (line, col)
-            
-            # Define cell position in screen
-            cell.x = SUDOKU_COORDINATES[0] + col * CELL_WIDTH + (CELL_WIDTH / 2)
-            cell.y = SUDOKU_COORDINATES[1] + line * CELL_HEIGHT + (CELL_HEIGHT / 2)
-            
-            # Get cell image
-            left = col * CELL_WIDTH + OFFSET
-            top = line * CELL_HEIGHT + OFFSET
-            right = left + CELL_WIDTH - OFFSET
-            bottom = top + CELL_HEIGHT - OFFSET
-            img = image.crop((left, top, right, bottom)).resize((64, 64))
-            img = img.convert('L')
-            cell.image = img
-            
             # Get cell value using pytesseract
-            cell.get_value()
-            
-            lineList.append(cell)
-        board.append(lineList)
+            cells[col][line].get_value()
+            sudoku_line.append(cells[col][line].value)
+        sudoku_matrix.append(sudoku_line)
         
+
     # Solve sudoku
-    boardValue = [[int(e.value) for e in line] for line in board]
-    print('\Original:')
-    for line in boardValue:
-        print(line)
-    boardSolved = solve(boardValue)
+    print('\nOriginal:')
+    print_board(sudoku_matrix)
+    sudoku_solved = solve(sudoku_matrix)
     print('\nSolved:')
-    for line in boardSolved:
-        print(line)
+    print_board(sudoku_solved)
+    
+    # Send solved sudoku to device
+    for col in range(9):
+        for line in range(9):
+            if cells[col][line].value == 0:
+                device.shell(f'input tap {cells[col][line].x} {cells[col][line].y}')
+                # TODO: input number
+    
+    print('Solved!, input "s" to solve another sudoku')
