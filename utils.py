@@ -59,3 +59,57 @@ def print_board(board):
         print()
     print("+",end="")
     print("-------+"*3)
+    
+def get_numbers(screen, sudoku_board, sudoku_start_pos):
+    # Crop image below sudoku board
+    x, y = sudoku_start_pos[0], sudoku_start_pos[1]
+    sudoku_end_pos = (x + sudoku_board.shape[1], y + sudoku_board.shape[0])
+    img = screen[y+sudoku_board.shape[0]:,:]
+    
+    # Image processing
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, imt_thresh = cv2.threshold(img_gray, 0, 255, cv2.THRESH_OTSU | cv2.THRESH_BINARY_INV)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (18, 18))
+    dilation = cv2.dilate(imt_thresh, kernel, iterations=1)
+    cnts, hier = cv2.findContours(dilation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    
+    # Get 9 elements at same line
+    elements_y = {}
+    thresh = int(img.shape[0] * 0.01)
+    for c in cnts:
+        x, y, w, h = cv2.boundingRect(c)
+        keys = list(elements_y.keys())
+        for key in keys:
+            if abs(y - key) < thresh:
+                elements_y[key] += 1
+                continue
+        else:
+            if y not in keys:
+                elements_y[y] = 1
+    
+    # Find numbers
+    img2 = img.copy()
+    numbers_pos = []
+    for element in elements_y:
+        if elements_y[element] == 9:
+            for c in cnts:
+                x, y, w, h = cv2.boundingRect(c)
+                if abs(y - element) < thresh:
+                    cv2.rectangle(img2, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    cv2.putText(img2, str(y), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    numbers_pos.append((int(x+w/2), int(sudoku_end_pos[1]+y+h/2)))
+
+    # Order numbers by x position and make dict
+    numbers_ordered = sorted(numbers_pos, key=lambda x: x[0])
+    numbers = {i+1:numbers_ordered[i] for i in range(len(numbers_ordered))}
+    
+    return numbers
+
+# Used to visualize screen touch
+def visualize_tap(screen, x, y):
+    img = screen.copy()
+    cv2.rectangle(img, (x-20, y-20), (x+20, y+20), (0, 255, 0), 2)
+    img = cv2.resize(img, (0,0), fx=0.3, fy=0.3)
+    cv2.imshow("img", img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
