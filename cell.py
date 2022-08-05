@@ -1,7 +1,3 @@
-from re import S
-from cv2 import mean
-from skimage.metrics import structural_similarity
-from PIL import Image
 import numpy as np
 import cv2
 import pytesseract
@@ -14,7 +10,7 @@ class Cell:
     y:int = 0
     value:int = 0
     pos:tuple = (0,0)
-    image:Image = None
+    image:np.array = None
     
     def __init__(self) -> None:
         pass
@@ -23,31 +19,32 @@ class Cell:
         return f'Cell({self.pos}), value={self.value})'
     
     def get_value(self) -> None:
-        # Initial image processing
-        img = cv2.resize(self.image , (200, 200))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)[1]
+        # Image processing
+        img = self.image.copy()
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        _, imt_thresh = cv2.threshold(img_gray, 0, 255, cv2.THRESH_OTSU | cv2.THRESH_BINARY_INV)
         
         # Empty image
-        if mean(img)[0] >= 253:
+        if cv2.mean(imt_thresh)[0] >= 253:
             self.value = 0
             return
         
         # pytesseract preparation
-        _, thresh = cv2.threshold(img, 127, 255, 0)
-        contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        mask = np.zeros_like(img)
-        cv2.drawContours(mask, contours, 0, 255, -1)
-        out = np.zeros_like(img)
-        out[mask == 255] = img[mask == 255]
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
-        close = cv2.morphologyEx(out, cv2.MORPH_CLOSE, kernel, iterations=2)
-        blurred = cv2.GaussianBlur(close, (0,0), 3)
-        sharpen_filter = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-        sharp = cv2.filter2D(blurred, -1, sharpen_filter)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (18, 18))
+        dilation = cv2.dilate(imt_thresh, kernel, iterations=1)
+        cnts, hier = cv2.findContours(dilation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if len(cnts) == 0:
+            self.value = 0
+            return
+        else:
+            # Found number
+            for c in cnts:
+                x, y, w, h = cv2.boundingRect(c)
+                cropped = imt_thresh[y:y+h, x:x+w]
+                cropped = cv2.bitwise_not(cropped)
         
         # Get value
-        text = list(pytesseract.image_to_string(sharp, lang="eng",config='--psm 6 --oem 3 -c tessedit_char_whitelist=" 123456789"'))
+        text = list(pytesseract.image_to_string(cropped, lang="eng",config='--psm 6 --oem 3 -c tessedit_char_whitelist=" 123456789"'))
         if len(text) == 0:
             self.value = 0
         else:
