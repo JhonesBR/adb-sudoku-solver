@@ -1,5 +1,5 @@
 # Adb Sudoku Solver
-##### © 2021 João Vitor Oliveira de Melo. All rights reserved.
+##### © 2022 João Vitor Oliveira de Melo. All rights reserved.
 
 ## English
 The goal of this project is to be able to complete a Sudoku puzzle obtained in an android cellphone ([Link to Google Play][sudoku]) using image recognition and processing techniques.
